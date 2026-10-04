@@ -159,8 +159,9 @@ then `migrate:fresh --seed`.
 
 ## 6. Testing approach
 
-No PHPUnit suite yet (see §8). Verification has been done **over HTTP** with per-user
-cookie jars:
+A baseline PHPUnit suite exists and is green (`php artisan test` — guest-redirect,
+login-page, unit smoke). Domain-level feature tests are the main gap (see §7).
+Everything else has been verified **over HTTP** with per-user cookie jars:
 
 ```bash
 # pattern: login → scrape CSRF → POST → assert redirect + DB row
@@ -182,8 +183,9 @@ audit rows, and 403/redirect authorization checks.
 
 ## 7. Known limitations
 
-- **PHPUnit tests**: none written yet — highest-value next step (Feature tests for the
-  status engine, allocation ranking, and permission middleware).
+- **PHPUnit domain tests**: the baseline suite is green, but there are no feature tests
+  yet for the status engine, allocation ranking, or permission middleware —
+  highest-value next step.
 - **E-mail notifications**: in-app only; no mail transport wired.
 - **`roles` CRUD**: roles/permissions are seeded; there is no UI to edit them
   (`roles.manage` permission exists for a future screen).

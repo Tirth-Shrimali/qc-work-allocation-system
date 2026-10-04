@@ -40,7 +40,7 @@ LAST UPDATED: 2026-10-04 08:50
 | 16 | Reports                  | Completed   |     100% | 6 reports + filters; CSV export verified (text/csv, real rows) |
 | 17 | Audit Logs               | Completed   |     100% | Logger service + admin viewer with filters                  |
 | 18 | Security                 | Completed   |     100% | 403 checks verified for analyst/reviewer/guest              |
-| 19 | Responsive UI + Testing  | In Progress |      85% | UI + full-route HTTP smoke done (45 routes, no 500s); PHPUnit suite not written |
+| 19 | Responsive UI + Testing  | In Progress |      90% | UI + full-route HTTP smoke done (all GET routes, no 500s); PHPUnit baseline green (4 tests), domain tests pending |
 | 20 | Documentation            | Completed   |     100% | README.md, DEPLOYMENT.md, HANDOVER.md written               |
 
 ---
@@ -82,7 +82,8 @@ LAST UPDATED: 2026-10-04 08:50
 
 ## Known Issues / Remaining
 
-- PHPUnit feature tests not written (highest-value remaining item)
+- Domain PHPUnit feature tests not written (status engine, permissions); baseline
+  example suite is green
 - Forgot/reset password flow not implemented (change-password works)
 - E-mail notifications not wired (in-app only); no roles/permissions management UI
 - welcome.blade.php still present (unused; '/' redirects to /login)
@@ -100,7 +101,8 @@ LAST UPDATED: 2026-10-04 08:50
 - Attachments upload/download/delete: PASS (HTTP + DB + disk)
 - Reports pages + CSV export: PASS (HTTP)
 - Full-route smoke (all GET routes, 3 roles): PASS — no 500s
-- PHPUnit suite: NOT RUN (not written)
+- PHPUnit baseline suite: PASS (`php artisan test` — 4 tests, 6 assertions, exit 0);
+  domain feature tests (status engine, permissions) not yet written
 
 ## Known Limitations
 
