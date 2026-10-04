@@ -44,7 +44,7 @@ class EmployeeController extends Controller
 
     public function create()
     {
-        return view('employees.form', $this->formData());
+        return view('employees.form', array_merge($this->formData(), ['employee' => null]));
     }
 
     public function store(Request $request)

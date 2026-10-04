@@ -1,59 +1,136 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# QC Work Allocation System
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A complete, enterprise-style **Quality Control work management platform** built with Laravel 12 —
+from work request and multi-test scheduling, through smart analyst allocation, execution and
+result entry, to review/rework, dashboards, reports and full audit trails.
 
-## About Laravel
+Built as an internship project for a pharmaceutical / testing-laboratory QC department.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+---
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Features
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+| Module | What it does |
+| --- | --- |
+| **Authentication** | Session login, login throttling (5 attempts), remember-me, inactive-account blocking, login audit trail |
+| **RBAC** | 7 roles, 29 permissions, route middleware (`permission:...`), Blade directives (`@permission`, `@role`) |
+| **QC Masters** | 15 config-driven master modules (departments, products, materials, sample types, priorities, skills, instruments, test types, methods, specifications, locations, settings, …) with search, validation and audit logging |
+| **Work Requests** | Work orders carrying **multiple tests**, each with its own method, specification, priority and estimated duration; validation prevents empty requests |
+| **Allocation** | Smart candidate ranking (skill match + current workload) per test, one-click allocate/reallocate, full allocation history |
+| **Execution (Analyst)** | Accept → start → hold → resume → submit workflow, parameter-driven result entry with PASS/FAIL/OOS/OOT status, instrument selection, comments |
+| **Review** | Approve / rework / reject with mandatory reasons, review history, automatic work-order status roll-up |
+| **Attachments** | Per-work-order file upload (10 MB, whitelisted types), authorized download, delete, all audited |
+| **Dashboards** | Three role-specific dashboards (Supervisor / Analyst / Management) with real KPIs and Chart.js charts |
+| **Reports** | Overview, productivity, workload, overdue, rework, test-type load — with date filters and **CSV export** |
+| **Notifications** | In-app bell + notification centre, role-targeted sends on allocate/submit/review events, mark-as-read |
+| **Audit log** | Every create/update/delete/status change recorded with user, IP and old/new values |
 
-## Learning Laravel
+---
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+## Tech stack
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- **Backend:** Laravel 12 (PHP 8.3), MariaDB/MySQL (XAMPP), session driver `database`
+- **Frontend:** Blade, Bootstrap 5 + Bootstrap Icons (**vendored locally** — no CDN needed), vanilla JS, Chart.js
+- **Assets:** no build step required for the demo (`public/css/app.css`, `public/js/app.js`, `public/vendor/…`)
 
-## Laravel Sponsors
+---
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## Requirements
 
-### Premium Partners
+| Component | Version |
+| --- | --- |
+| PHP | ≥ 8.2 (demo runs on 8.3) with `pdo_mysql`, `mbstring`, `openssl`, `fileinfo` |
+| MySQL / MariaDB | 5.7+ / 10.4+ (demo runs MariaDB 10.4 via XAMPP) |
+| Composer | 2.x |
+| Node.js | only needed if you want to rebuild Vite assets (optional) |
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+---
 
-## Contributing
+## Installation
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+```bash
+composer install
+cp .env.example .env            # Windows: copy .env.example .env
+php artisan key:generate
+```
 
-## Code of Conduct
+Create the database, then configure `.env`:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```env
+DB_DATABASE=qc_work_allocation
+DB_USERNAME=root
+DB_PASSWORD=
+```
 
-## Security Vulnerabilities
+```bash
+php artisan migrate --seed      # full schema + demo data
+php artisan storage:link        # attachment downloads
+php artisan serve               # http://127.0.0.1:8000
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+A ready-made helper also exists: `composer setup`.
 
-## License
+Full environment notes (XAMPP, production checklist, troubleshooting): **[DEPLOYMENT.md](DEPLOYMENT.md)**
+Architecture and maintenance guide: **[HANDOVER.md](HANDOVER.md)** · Status tracker: **[PROGRESS.md](PROGRESS.md)**
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+---
+
+## Demo accounts
+
+All passwords are `password`.
+
+| Username | Role | See |
+| --- | --- | --- |
+| `admin` | super_admin | everything |
+| `qc_manager` | qc_admin | masters, work orders, allocation, reports |
+| `hod_qc` | qc_hod | approvals, reports, oversight |
+| `supervisor_qc` | qc_supervisor | allocation, review queue |
+| `analyst_raj` / `analyst_neha` / `analyst_amit` / `analyst_priya` | analyst | my-work queue, results |
+| `reviewer_qc` | reviewer | review / rework / reject |
+| `management` | management | dashboards + reports only |
+
+---
+
+## Workflow / status engine
+
+Every work-order test moves through a validated state machine
+(`app/Support/WorkStatus.php`, enforced by `App\Services\StatusService`):
+
+```
+NEW → ALLOCATED → ACCEPTED → IN_PROGRESS ⇄ ON_HOLD → SUBMITTED
+    → UNDER_REVIEW → APPROVED → COMPLETED
+                  ↘ REWORK → IN_PROGRESS (resubmit)
+                  ↘ REJECTED → CANCELLED
+```
+
+- Illegal transitions are rejected server-side (e.g. submitting without a saved result,
+  reviewing a test that is not under review, acting on another analyst's test → 403).
+- Work-order status rolls up automatically from its tests' statuses.
+
+---
+
+## Project structure (short version)
+
+```
+app/Http/Controllers/   Auth, WorkOrder, Allocation, MyWork, Review, Master,
+                        Employee, User, Report, Notification, AuditLog, …
+app/Services/           StatusService, AllocationService, ReviewService,
+                        WorkOrderService, NotificationService, AuditLogger
+app/Support/            WorkStatus (status constants + transition map)
+database/migrations/    11 migrations matching the QC schema
+database/seeders/       Rbac, QcMaster, Organization, User, WorkOrder seeders
+resources/views/        layouts + module folders + partials (badges, flash, empty)
+public/vendor/          Bootstrap 5, Bootstrap Icons, Chart.js (local, no CDN)
+routes/web.php          all routes with permission middleware
+```
+
+---
+
+## Testing performed
+
+The system was verified end-to-end over HTTP (curl with per-user sessions) covering:
+login/logout for all roles, all three dashboards, master CRUD, work-order creation with
+multi-test validation, allocation with live candidate JSON, the full status lifecycle,
+result entry, approve/rework/reject with reasons, attachment upload/download/delete,
+CSV export, notifications, and authorization checks (403s for wrong roles and guest
+redirects). See [PROGRESS.md](PROGRESS.md) for the module-by-module record.
