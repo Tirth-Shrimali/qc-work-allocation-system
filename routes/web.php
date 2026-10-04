@@ -22,6 +22,10 @@ Route::redirect('/', '/dashboard');
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'showLoginForm'])->name('login');
     Route::post('/login', [LoginController::class, 'login'])->middleware('throttle:10,1');
+
+    // Self-registration (blocked server-side when disabled by the administrator)
+    Route::get('/register', [\App\Http\Controllers\Auth\RegisterController::class, 'showRegistrationForm'])->name('register');
+    Route::post('/register', [\App\Http\Controllers\Auth\RegisterController::class, 'register'])->middleware('throttle:5,1');
 });
 
 Route::middleware('auth')->group(function () {
@@ -110,6 +114,10 @@ Route::middleware('auth')->group(function () {
         ->middleware('permission:users.edit')->name('users.update');
     Route::post('/users/{user}/toggle-status', [UserController::class, 'toggleStatus'])
         ->middleware('permission:users.edit')->name('users.toggle');
+    Route::post('/users/{user}/approve', [UserController::class, 'approve'])
+        ->middleware('permission:users.edit')->name('users.approve');
+    Route::post('/users/{user}/reject', [UserController::class, 'reject'])
+        ->middleware('permission:users.edit')->name('users.reject');
 
     // QC Masters (config-driven CRUD)
     Route::get('/masters/{master}', [MasterController::class, 'index'])
@@ -134,4 +142,18 @@ Route::middleware('auth')->group(function () {
     // Audit trail
     Route::get('/audit-logs', [\App\Http\Controllers\AuditLogController::class, 'index'])
         ->middleware('permission:system.audit')->name('audit.index');
+
+    // Admin settings centre (registration, session policy, usage limits, validity)
+    Route::get('/settings', [\App\Http\Controllers\SettingsController::class, 'index'])
+        ->middleware('permission:system.settings')->name('settings.index');
+    Route::get('/settings/{section}', [\App\Http\Controllers\SettingsController::class, 'index'])
+        ->middleware('permission:system.settings')->name('settings.section');
+    Route::post('/settings/{section}', [\App\Http\Controllers\SettingsController::class, 'update'])
+        ->middleware('permission:system.settings')->name('settings.update');
+    Route::get('/settings-active-users', [\App\Http\Controllers\SettingsController::class, 'activeUsers'])
+        ->middleware('permission:system.settings')->name('settings.active-users');
+    Route::post('/settings/license/extend', [\App\Http\Controllers\SettingsController::class, 'extendLicense'])
+        ->middleware('permission:system.settings')->name('settings.license.extend');
+    Route::post('/settings/license/toggle', [\App\Http\Controllers\SettingsController::class, 'toggleSuspend'])
+        ->middleware('permission:system.settings')->name('settings.license.toggle');
 });

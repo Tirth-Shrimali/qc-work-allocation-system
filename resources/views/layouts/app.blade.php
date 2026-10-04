@@ -122,8 +122,12 @@
             @endpermission
 
             @permission('system.settings')
-                <a href="{{ route('masters.index', 'settings') }}" class="nav-link-custom {{ request()->fullUrlIs('*masters/settings*') ? 'active' : '' }}">
+                <div class="nav-section">Administration</div>
+                <a href="{{ route('settings.index') }}" class="nav-link-custom {{ request()->routeIs('settings.*') ? 'active' : '' }}">
                     <i class="bi bi-gear"></i><span>Settings</span>
+                </a>
+                <a href="{{ route('settings.active-users') }}" class="nav-link-custom {{ request()->routeIs('settings.active-users') ? 'active' : '' }}">
+                    <i class="bi bi-people"></i><span>Active Users</span>
                 </a>
             @endpermission
         </nav>
@@ -213,6 +217,15 @@
         </header>
 
         <main class="app-content">
+            @if ($licenseBanner ?? null)
+                <div class="alert alert-{{ $licenseBanner['type'] ?? 'warning' }} d-flex align-items-center gap-2 mb-3" role="alert">
+                    <i class="bi {{ $licenseBanner['icon'] ?? 'bi-exclamation-triangle' }}"></i>
+                    <span>{{ $licenseBanner['text'] ?? '' }}</span>
+                    @permission('system.settings')
+                        <a href="{{ route('settings.section', 'license') }}" class="ms-auto alert-link small">Manage licence</a>
+                    @endpermission
+                </div>
+            @endif
             @include('partials.flash')
             @yield('content')
         </main>

@@ -4,8 +4,10 @@ namespace App\Services;
 
 use App\Models\WorkOrder;
 use App\Models\WorkOrderTest;
+use App\Support\AppSettings;
 use App\Support\WorkStatus;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class WorkOrderService
 {
@@ -39,6 +41,8 @@ class WorkOrderService
      */
     public function create(array $data, array $tests, \App\Models\User $actor): WorkOrder
     {
+        $this->guardActiveProjectLimit();
+
         return DB::transaction(function () use ($data, $tests, $actor) {
             $order = WorkOrder::create([
                 'work_no' => $data['work_no'] ?? $this->generateWorkNo(),
@@ -91,5 +95,26 @@ class WorkOrderService
 
             return $order->load('tests.testType', 'tests.testMethod');
         });
+    }
+
+    /**
+     * Admin-controlled maximum of simultaneously active projects (work requests).
+     * Active = any work order not COMPLETED/CANCELLED. Existing orders are never touched.
+     */
+    private function guardActiveProjectLimit(): void
+    {
+        $max = AppSettings::maxActiveProjects();
+
+        if ($max <= 0) {
+            return; // unlimited
+        }
+
+        $active = WorkOrder::whereIn('status', WorkStatus::OPEN)->count();
+
+        if ($active >= $max) {
+            throw ValidationException::withMessages([
+                'batch_no' => 'The maximum number of active projects has been reached. Please complete or deactivate an existing project before creating another.',
+            ]);
+        }
     }
 }

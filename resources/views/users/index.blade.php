@@ -38,6 +38,7 @@
                 <select id="status" name="status" class="form-select">
                     <option value="">All</option>
                     <option value="active" @selected(request('status') === 'active')>Active</option>
+                    <option value="pending" @selected(request('status') === 'pending')>Pending</option>
                     <option value="inactive" @selected(request('status') === 'inactive')>Inactive</option>
                 </select>
             </div>
@@ -61,13 +62,27 @@
                         <td class="small">{{ $u->username }}</td>
                         <td><span class="badge text-bg-primary">{{ $u->primaryRole()?->name ?? '—' }}</span></td>
                         <td class="small text-muted">{{ $u->employee?->employee_code ?? '—' }}</td>
-                        <td><span class="badge text-bg-{{ $u->status === 'active' ? 'success' : 'secondary' }}">{{ ucfirst($u->status) }}</span></td>
+                        <td><span class="badge text-bg-{{ $u->status === 'active' ? 'success' : ($u->status === 'pending' ? 'warning text-dark' : 'secondary') }}">{{ ucfirst($u->status) }}</span></td>
                         <td class="small text-muted">{{ $u->last_login_at?->format('d M Y H:i') ?? 'Never' }}</td>
                         <td class="text-end">
                             <div class="btn-group btn-group-sm">
                                 <a href="{{ route('users.edit', $u) }}" class="btn btn-outline-secondary" title="Edit"><i class="bi bi-pencil"></i></a>
                                 @permission('users.edit')
-                                    @if($u->id !== auth()->id())
+                                    @if($u->status === 'pending')
+                                        <form action="{{ route('users.approve', $u) }}" method="POST" class="d-inline">
+                                            @csrf
+                                            <button class="btn btn-outline-success" type="submit" title="Approve">
+                                                <i class="bi bi-check2-circle"></i>
+                                            </button>
+                                        </form>
+                                        <form action="{{ route('users.reject', $u) }}" method="POST" class="d-inline"
+                                              data-confirm="Reject this registration? They will not be able to sign in.">
+                                            @csrf
+                                            <button class="btn btn-outline-danger" type="submit" title="Reject">
+                                                <i class="bi bi-x-circle"></i>
+                                            </button>
+                                        </form>
+                                    @elseif($u->id !== auth()->id())
                                         <form action="{{ route('users.toggle', $u) }}" method="POST"
                                               data-confirm="{{ $u->status === 'active' ? 'Deactivate this user?' : 'Reactivate this user?' }}">
                                             @csrf

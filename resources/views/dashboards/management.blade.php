@@ -52,6 +52,61 @@
         </div>
     </div>
 
+    @if (!empty($adminWidgets))
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-xl-3">
+                <a href="{{ route('settings.active-users') }}" class="text-decoration-none">
+                    <div class="kpi-card h-100">
+                        <span class="kpi-icon bg-soft-primary"><i class="bi bi-people"></i></span>
+                        <div class="kpi-body">
+                            <div class="kpi-value">{{ $adminWidgets['activeUsers'] }}{{ $adminWidgets['maxUsers'] > 0 ? ' / '.$adminWidgets['maxUsers'] : '' }}</div>
+                            <div class="kpi-label">Active Users{{ $adminWidgets['maxUsers'] > 0 && $adminWidgets['activeUsers'] >= $adminWidgets['maxUsers'] ? ' — Full Capacity' : '' }}</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-6 col-xl-3">
+                <a href="{{ route('settings.section', 'usage') }}" class="text-decoration-none">
+                    <div class="kpi-card h-100">
+                        <span class="kpi-icon bg-soft-info"><i class="bi bi-kanban"></i></span>
+                        <div class="kpi-body">
+                            <div class="kpi-value">{{ $adminWidgets['activeProjects'] }}{{ $adminWidgets['maxProjects'] > 0 ? ' / '.$adminWidgets['maxProjects'] : '' }}</div>
+                            <div class="kpi-label">Active Projects</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-6 col-xl-3">
+                <a href="{{ route('settings.section', 'license') }}" class="text-decoration-none">
+                    <div class="kpi-card h-100">
+                        <span class="kpi-icon bg-soft-warning"><i class="bi bi-patch-check"></i></span>
+                        <div class="kpi-body">
+                            <div class="kpi-value">
+                                <span class="badge text-bg-{{ ['active' => 'success', 'expiring' => 'warning', 'grace' => 'warning', 'expired' => 'danger', 'suspended' => 'danger'][$adminWidgets['licenseState']] ?? 'secondary' }}">
+                                    {{ $adminWidgets['licenseStateLabel'] }}
+                                </span>
+                            </div>
+                            <div class="kpi-label">
+                                {{ $adminWidgets['remainingDays'] !== null ? ($adminWidgets['remainingDays'] >= 0 ? $adminWidgets['remainingDays'].' Days Remaining' : abs($adminWidgets['remainingDays']).' Days Overdue') : 'No Expiry Set' }}
+                            </div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-6 col-xl-3">
+                <a href="{{ route('settings.section', 'users') }}" class="text-decoration-none">
+                    <div class="kpi-card h-100">
+                        <span class="kpi-icon bg-soft-success"><i class="bi bi-person-plus"></i></span>
+                        <div class="kpi-body">
+                            <div class="kpi-value">{{ $adminWidgets['registrationEnabled'] ? 'Enabled' : 'Disabled' }}</div>
+                            <div class="kpi-label">Registration{{ $adminWidgets['registrationApproval'] ? ' · Approval On' : '' }}</div>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+    @endif
+
     <div class="row g-3 mb-3">
         <div class="col-lg-8">
             <div class="card h-100">

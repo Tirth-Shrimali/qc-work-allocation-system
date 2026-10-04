@@ -57,7 +57,7 @@ class UserController extends Controller
             'password' => ['required', 'string', 'confirmed', Password::min(8)],
             'employee_id' => ['nullable', 'exists:employees,id'],
             'role_id' => ['required', 'exists:roles,id'],
-            'status' => ['required', Rule::in(['active', 'inactive'])],
+            'status' => ['required', Rule::in(['active', 'inactive', 'pending'])],
         ]);
 
         $user = User::create([
@@ -94,7 +94,7 @@ class UserController extends Controller
             'password' => ['nullable', 'string', 'confirmed', Password::min(8)],
             'employee_id' => ['nullable', 'exists:employees,id'],
             'role_id' => ['required', 'exists:roles,id'],
-            'status' => ['required', Rule::in(['active', 'inactive'])],
+            'status' => ['required', Rule::in(['active', 'inactive', 'pending'])],
         ]);
 
         if ($user->id === $request->user()->id && $data['status'] !== 'active') {
@@ -130,5 +130,61 @@ class UserController extends Controller
         $message = $user->status === 'active' ? 'activated' : 'deactivated';
 
         return back()->with('success', "User {$message} successfully.");
+    }
+
+    /** Approve a pending self-registered user (or reactivate an inactive one). */
+    public function approve(Request $request, User $user)
+    {
+        if ($user->id === $request->user()->id) {
+            return back()->withErrors(['user' => 'Your account is already active.']);
+        }
+
+        if ($user->status === 'active') {
+            return back()->with('success', "User {$user->username} is already active.");
+        }
+
+        $old = ['status' => $user->status];
+
+        $user->update(['status' => 'active', 'approved_at' => now()]);
+
+        AuditLogger::log('Users', 'approve', $user->id, $old, ['status' => 'active']);
+
+        \App\Services\NotificationService::send(
+            $user->id,
+            'user.approved',
+            'Account Approved',
+            'Your account has been approved. You can now sign in.',
+            route('login')
+        );
+
+        return back()->with('success', "User {$user->username} approved. They can now sign in.");
+    }
+
+    /** Reject a pending registration — the account stays inactive. */
+    public function reject(Request $request, User $user)
+    {
+        if ($user->id === $request->user()->id) {
+            return back()->withErrors(['user' => 'You cannot reject your own account.']);
+        }
+
+        if ($user->status === 'inactive') {
+            return back()->with('success', "User {$user->username} is already inactive.");
+        }
+
+        $old = ['status' => $user->status];
+
+        $user->update(['status' => 'inactive', 'approved_at' => null]);
+
+        AuditLogger::log('Users', 'reject', $user->id, $old, ['status' => 'inactive']);
+
+        \App\Services\NotificationService::send(
+            $user->id,
+            'user.rejected',
+            'Registration Not Approved',
+            'Your registration was not approved. Please contact the administrator.',
+            route('login')
+        );
+
+        return back()->with('success', "User {$user->username} rejected. They cannot sign in.");
     }
 }

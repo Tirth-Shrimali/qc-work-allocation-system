@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Middleware\CheckInactivity;
 use App\Http\Middleware\CheckPermission;
+use App\Http\Middleware\EnforceLicense;
 use App\Http\Middleware\EnsureUserIsActive;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -21,8 +23,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'active' => EnsureUserIsActive::class,
         ]);
 
+        // Order matters: licence gate first, then account liveness, then inactivity timeout.
         $middleware->web(append: [
+            EnforceLicense::class,
             EnsureUserIsActive::class,
+            CheckInactivity::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

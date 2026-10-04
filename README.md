@@ -24,6 +24,29 @@ Built as an internship project for a pharmaceutical / testing-laboratory QC depa
 | **Reports** | Overview, productivity, workload, overdue, rework, test-type load — with date filters and **CSV export** |
 | **Notifications** | In-app bell + notification centre, role-targeted sends on allocate/submit/review events, mark-as-read |
 | **Audit log** | Every create/update/delete/status change recorded with user, IP and old/new values |
+| **User Registration** | Self-registration with admin toggle, optional approval workflow (pending → approve/reject), safe default role |
+| **Session Policy** | Per-login "Stay active for" choice (30 min – 8 h), admin-defined options/default/maximum, server-side inactivity timeout |
+| **Concurrent User Limit** | Admin-set maximum simultaneous users, real session-based counting, slot release on logout/expiry |
+| **Active Project Limit** | Admin-set maximum active work requests; creation blocked politely at capacity, existing work untouched |
+| **Application Validity** | DB-backed licence (activation/expiry/grace/behaviour), server-enforced expiry screen, warning thresholds, extension with full history |
+
+---
+
+## Enterprise controls (admin-configurable)
+
+All four controls are database-backed (`settings` table), enforced **server-side**,
+audited, and managed from the **Settings centre** (`/settings`, permission `system.settings`):
+
+| Control | Where | What it does |
+| --- | --- | --- |
+| **Registration** | `/settings/users` | Toggle self-registration, require admin approval, choose the default new-user role. Pending users cannot sign in until approved under **User Management**. |
+| **Session policy** | `/settings/session` | Allowed inactivity durations, default and maximum. Users pick "Stay active for" at login; middleware logs them out after that idle period with a clear message. Remember-me never bypasses the policy. |
+| **Usage limits** | `/settings/usage` | Maximum simultaneous users (counted from live sessions, not the users table) and maximum active projects (work requests). `0` = unlimited. |
+| **Application validity** | `/settings/license` | Activation/expiry dates, grace period, expiry behaviour (block / read-only / restrict login), warning thresholds, suspend/reactivate, extension by days or date with reason + history. |
+
+Live widgets on the admin dashboard show real values: active users `7 / 10`,
+active projects `4 / 5`, licence status with days remaining, registration state.
+Active session details: `/settings-active-users`.
 
 ---
 
@@ -67,6 +90,9 @@ php artisan migrate --seed      # full schema + demo data
 php artisan storage:link        # attachment downloads
 php artisan serve               # http://127.0.0.1:8000
 ```
+
+> Upgrading an existing install: run **`php artisan migrate`** (additive only —
+> never drops tables or overwrites existing settings), see [DEPLOYMENT.md](DEPLOYMENT.md).
 
 A ready-made helper also exists: `composer setup`.
 
@@ -133,4 +159,10 @@ login/logout for all roles, all three dashboards, master CRUD, work-order creati
 multi-test validation, allocation with live candidate JSON, the full status lifecycle,
 result entry, approve/rework/reject with reasons, attachment upload/download/delete,
 CSV export, notifications, and authorization checks (403s for wrong roles and guest
-redirects). See [PROGRESS.md](PROGRESS.md) for the module-by-module record.
+redirects).
+
+The enterprise controls are covered by a PHPUnit suite (`php artisan test` — 47 tests):
+registration settings & approval, inactivity timeout enforcement, concurrent-user
+capacity, active-project limit, licence states (active/grace/expired/suspended),
+expiry behaviours, extension + history, and authorization on every settings route.
+See [PROGRESS.md](PROGRESS.md) for the module-by-module record.

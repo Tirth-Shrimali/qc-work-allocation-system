@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\LoginLog;
 use App\Services\AuditLogger;
+use App\Services\SessionTracker;
+use App\Support\AppSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,13 +17,20 @@ use Illuminate\View\View;
 
 class LoginController extends Controller
 {
+    public function __construct(private SessionTracker $sessions)
+    {
+    }
+
     public function showLoginForm(): View|RedirectResponse
     {
         if (Auth::check()) {
             return redirect()->intended('/dashboard');
         }
 
-        return view('auth.login');
+        return view('auth.login', [
+            'timeoutChoices' => AppSettings::timeoutChoices(),
+            'allowRegistration' => AppSettings::allowRegistration(),
+        ]);
     }
 
     public function login(Request $request): RedirectResponse
@@ -29,6 +38,7 @@ class LoginController extends Controller
         $credentials = $request->validate([
             'username' => ['required', 'string'],
             'password' => ['required', 'string'],
+            'session_timeout' => ['nullable', 'integer'],
         ]);
 
         $throttleKey = Str::transliterate(Str::lower($request->input('username')).'|'.$request->ip());
@@ -42,6 +52,7 @@ class LoginController extends Controller
         }
 
         $remember = $request->boolean('remember');
+        $timeoutMinutes = AppSettings::resolveTimeout($request->input('session_timeout'));
 
         if (! Auth::attempt(['username' => $credentials['username'], 'password' => $credentials['password']], $remember)) {
             RateLimiter::hit($throttleKey, 60);
@@ -61,21 +72,28 @@ class LoginController extends Controller
 
         $user = Auth::user();
 
-        if ($user->status !== 'active') {
-            Auth::logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
+        if ($user->status === 'pending') {
+            $this->rejectLogin($request, $user, 'Account pending approval');
 
-            LoginLog::create([
-                'user_id' => $user->id,
-                'username' => $user->username,
-                'ip_address' => $request->ip(),
-                'status' => 'FAILED',
-                'failure_reason' => 'Account inactive',
+            throw ValidationException::withMessages([
+                'username' => 'Your account is pending approval. Please contact the administrator.',
             ]);
+        }
+
+        if ($user->status !== 'active') {
+            $this->rejectLogin($request, $user, 'Account inactive');
 
             throw ValidationException::withMessages([
                 'username' => 'Your account has been deactivated. Please contact the administrator.',
+            ]);
+        }
+
+        // Admin-controlled simultaneous user limit (real session count, not the users table).
+        if (! $this->sessions->hasCapacity($user)) {
+            $this->rejectLogin($request, $user, 'Concurrent user limit reached');
+
+            throw ValidationException::withMessages([
+                'username' => 'The maximum number of active users has currently been reached. Please try again later.',
             ]);
         }
 
@@ -93,7 +111,13 @@ class LoginController extends Controller
             'status' => 'SUCCESS',
         ]);
 
-        AuditLogger::log('Authentication', 'login', $user->id);
+        // Remember the chosen inactivity duration for this session (server-side record).
+        $request->session()->put('session_timeout', $timeoutMinutes);
+        $this->sessions->start($request, $user, $timeoutMinutes, $log->id);
+
+        AuditLogger::log('Authentication', 'login', $user->id, null, [
+            'session_timeout_minutes' => $timeoutMinutes,
+        ]);
 
         return redirect()->intended('/dashboard');
     }
@@ -110,6 +134,8 @@ class LoginController extends Controller
                 ->limit(1)
                 ->update(['logout_at' => now()]);
 
+            $this->sessions->endCurrent($request, 'logout');
+
             AuditLogger::log('Authentication', 'logout', $user->id);
         }
 
@@ -118,5 +144,21 @@ class LoginController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('login');
+    }
+
+    /** Roll back the authentication attempt for a rejected login. */
+    private function rejectLogin(Request $request, \App\Models\User $user, string $reason): void
+    {
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        LoginLog::create([
+            'user_id' => $user->id,
+            'username' => $user->username,
+            'ip_address' => $request->ip(),
+            'status' => 'FAILED',
+            'failure_reason' => $reason,
+        ]);
     }
 }

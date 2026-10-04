@@ -6,6 +6,9 @@ use App\Models\AppNotification;
 use App\Models\Employee;
 use App\Models\WorkOrder;
 use App\Models\WorkOrderTest;
+use App\Services\NotificationService;
+use App\Services\SessionTracker;
+use App\Support\AppSettings;
 use App\Support\WorkStatus;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -73,10 +76,64 @@ class DashboardController extends Controller
             ->get()
             ->filter(fn ($e) => $e->open_work > 0);
 
+        // Real enterprise-control widgets for administrators only.
+        $adminWidgets = null;
+
+        if ($user->hasPermission('system.settings')) {
+            $this->fireLicenseWarning();
+
+            $adminWidgets = [
+                'activeUsers' => (new SessionTracker)->activeCount(),
+                'maxUsers' => AppSettings::maxActiveUsers(),
+                'activeProjects' => $open,
+                'maxProjects' => AppSettings::maxActiveProjects(),
+                'licenseState' => AppSettings::licenseState(),
+                'licenseStateLabel' => AppSettings::licenseStateLabel(),
+                'remainingDays' => AppSettings::remainingDays(),
+                'registrationEnabled' => AppSettings::allowRegistration(),
+                'registrationApproval' => AppSettings::requireApproval(),
+            ];
+        }
+
         return view('dashboards.management', compact(
             'total', 'open', 'completed', 'pendingReview', 'overdue', 'newRequests',
-            'inProgress', 'rework', 'byPriority', 'byDepartment', 'trendData', 'analystWorkload'
+            'inProgress', 'rework', 'byPriority', 'byDepartment', 'trendData', 'analystWorkload', 'adminWidgets'
         ));
+    }
+
+    /**
+     * Notify administrators once per warning threshold as the expiry approaches.
+     * Thresholds reset whenever the licence dates are extended.
+     */
+    private function fireLicenseWarning(): void
+    {
+        if (AppSettings::licenseState() !== 'expiring') {
+            return;
+        }
+
+        $remaining = AppSettings::remainingDays();
+        $threshold = AppSettings::warningThresholdHit($remaining);
+
+        if ($threshold === null) {
+            return;
+        }
+
+        $lastWarned = (int) (AppSettings::get('license.last_warned') ?: PHP_INT_MAX);
+
+        // A smaller threshold is closer to expiry → only notify when we cross a new one.
+        if ($threshold >= $lastWarned) {
+            return;
+        }
+
+        NotificationService::toRoles(
+            ['super_admin', 'qc_admin'],
+            'license.warning',
+            'License Expiry Warning',
+            "The application license expires in {$remaining} day(s) (".AppSettings::licenseExpiry()?->format('d M Y').'). Please extend the validity to avoid interruption.',
+            route('settings.section', 'license')
+        );
+
+        AppSettings::set('license.last_warned', (string) $threshold);
     }
 
     private function supervisorDashboard($user)

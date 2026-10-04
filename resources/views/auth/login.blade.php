@@ -23,6 +23,18 @@
         <h1>Welcome back</h1>
         <p class="subtitle">Sign in to manage samples, allocations and reviews.</p>
 
+        @if (session('status'))
+            <div class="alert alert-warning py-2 small mb-3" role="alert">
+                <i class="bi bi-clock-history me-1"></i>{{ session('status') }}
+            </div>
+        @endif
+
+        @if (session('success'))
+            <div class="alert alert-success py-2 small mb-3" role="alert">
+                <i class="bi bi-check-circle me-1"></i>{{ session('success') }}
+            </div>
+        @endif
+
         @if ($errors->any())
             <div class="alert alert-danger py-2 small mb-3" role="alert">
                 <i class="bi bi-exclamation-triangle me-1"></i>{{ $errors->first() }}
@@ -53,6 +65,21 @@
                 </div>
             </div>
 
+            <div class="mb-3">
+                <label for="session_timeout" class="form-label small mb-1">Stay active for</label>
+                <div class="input-group">
+                    <span class="input-group-text"><i class="bi bi-clock"></i></span>
+                    <select class="form-select" id="session_timeout" name="session_timeout">
+                        @foreach ($timeoutChoices as [$value, $label, $isDefault])
+                            <option value="{{ $value }}" @selected((int) old('session_timeout', $isDefault ? $value : 0) === $value)>
+                                {{ $label }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="form-text small">You will be signed out after this period of inactivity.</div>
+            </div>
+
             <div class="d-flex align-items-center justify-content-between mb-3">
                 <label class="d-flex align-items-center gap-2 small mb-0">
                     <input type="checkbox" name="remember" value="1" class="form-check-input mt-0">
@@ -65,6 +92,12 @@
                 <i class="bi bi-box-arrow-in-right me-1"></i>Sign in
             </button>
         </form>
+
+        @if ($allowRegistration ?? false)
+            <div class="text-center small text-muted mt-3">
+                New here? <a href="{{ route('register') }}">Create an account</a>
+            </div>
+        @endif
 
         <div class="demo-credentials">
             <strong>Demo accounts</strong> (password: <code>password</code>)<br>

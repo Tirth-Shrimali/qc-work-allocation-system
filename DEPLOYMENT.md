@@ -87,7 +87,58 @@ console window must stay open (or run it as a background process).
 
 ---
 
-## 2. Resetting the demo database
+## 2. New Migrations & Initial Configuration (enterprise controls)
+
+The upgrade adds three **additive** migrations — safe to run on an existing database
+(no drops, no data rewrites, settings insert only when the key is missing):
+
+| Migration | Purpose |
+| --- | --- |
+| `2026_10_04_000001_add_registration_and_session_policy_columns` | `users.approved_at`, `users.status` gains `pending`, `user_sessions.timeout_minutes` |
+| `2026_10_04_000002_create_license_histories_table` | Licence change history (prev/new expiry, actor, reason) |
+| `2026_10_04_000003_seed_enterprise_settings` | Idempotent default settings for all four controls |
+
+Apply with:
+
+```bash
+php artisan migrate --force      # NEVER migrate:fresh on a live database
+```
+
+### Settings reference (stored in the `settings` table)
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `registration.allow_registration` | `1` | Self-registration on/off |
+| `registration.require_approval` | `1` | New accounts start `pending` |
+| `registration.default_role` | `analyst` | Role code given to registrants |
+| `session.options` | `30,60,120,240,480` | Allowed inactivity minutes |
+| `session.default` / `session.max` | `120` / `480` | Default and maximum inactivity minutes |
+| `usage.max_active_users` | `10` | Simultaneous users (`0` = unlimited) |
+| `usage.max_active_projects` | `20` | Active work requests (`0` = unlimited) |
+| `license.activation_date` / `license.expiry_date` | empty | Licence period (`Y-m-d`); empty = no expiry configured |
+| `license.grace_days` | `0` | Days after expiry before enforcement |
+| `license.behavior` | `block` | `block` \| `readonly` \| `restrict_login` |
+| `license.warn_thresholds` | `30,15,7,3,1` | Warning days |
+| `license.suspended` | `0` | Manual suspension flag |
+
+All of these are edited through the UI at **`/settings`** (permission `system.settings`)
+— do not edit rows by hand unless recovering the system.
+
+### Configuring each control
+
+1. **Session duration** — `/settings/session`: tick allowed options, pick default,
+   set maximum. Users then choose "Stay active for" on the login screen; anything
+   above the maximum is clamped server-side. `SESSION_LIFETIME` in `.env` is set to
+   `1440` (24 h) so Laravel's own GC never pre-empts a user's chosen window.
+2. **User limits** — `/settings/usage`: presets or custom values, `0` = unlimited.
+3. **Project limit** — same page; count = work orders not completed/cancelled.
+4. **Licence activation/extension** — `/settings/license`: set activation + expiry
+   (or use *Extend by days / new date* with a mandatory reason). Every change is
+   written to `license_histories` and the audit trail.
+
+---
+
+## 3. Resetting the demo database
 
 Between rehearsals it is useful to restore pristine data:
 
@@ -103,7 +154,7 @@ notifications and audit rows.
 
 ---
 
-## 3. Production / real-server checklist
+## 4. Production / real-server checklist
 
 | Item | Action |
 | --- | --- |
@@ -113,7 +164,8 @@ notifications and audit rows.
 | Migrations | `php artisan migrate --force` |
 | Web server | nginx/Apache with DocumentRoot = `public/`, HTTPS enforced |
 | Permissions | `storage/` and `bootstrap/cache/` writable by the web user only |
-| Sessions | `SESSION_DRIVER=database` (already default) or `redis` |
+| Sessions | `SESSION_DRIVER=database` (already default) or `redis`; keep `SESSION_LIFETIME=1440` so Laravel GC never pre-empts a user's chosen inactivity window (the app enforces the real timeout itself) |
+| Licence | Set the real activation/expiry dates at `/settings/license` after go-live; leave empty only for internal/test installs |
 | Backups | Daily `mysqldump` of the database + `storage/app/public` uploads |
 | Logs | Monitor `storage/logs/laravel.log`; ship to a log service if available |
 | Updates | `composer install --no-dev --optimize-autoloader`, `php artisan config:cache`, `route:cache`, `view:cache` |
@@ -123,7 +175,7 @@ notifications synchronously — no queue worker is required for demo or normal u
 
 ---
 
-## 4. Troubleshooting
+## 5. Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
@@ -138,7 +190,7 @@ notifications synchronously — no queue worker is required for demo or normal u
 
 ---
 
-## 5. Verification smoke test (after any deploy)
+## 6. Verification smoke test (after any deploy)
 
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/login   # expect 200

@@ -55,6 +55,29 @@ To change workflow rules, edit `TRANSITIONS` only; everything else follows.
 **Roll-up:** `StatusService::syncWorkOrder($id)` derives the work-order status from its
 tests (all completed → COMPLETED; any in progress → IN_PROGRESS; etc.).
 
+### Enterprise-control pipeline (appended to the `web` group, in this order)
+
+```
+EnforceLicense → EnsureUserIsActive → CheckInactivity → … route middleware (auth, permission)
+```
+
+1. **`EnforceLicense`** — computes the licence state server-side from the `settings`
+   table (`active / expiring / grace / expired / suspended / unconfigured`) using the
+   application clock. Expired/suspended → professional `503` screen, modulated by
+   `license.behavior` (`block` / `readonly` / `restrict_login`). Holders of
+   `system.settings` always pass so an administrator can renew. Grace/expiry warnings
+   are shared with the layout as a banner.
+2. **`EnsureUserIsActive`** — (pre-existing) blocks deactivated/expired accounts.
+3. **`CheckInactivity`** — reads the timeout chosen at login from the
+   `user_sessions` row, clamps it to the admin maximum, and on idle overflow ends the
+   session server-side (logout + invalidate + neutral “expired because of inactivity”
+   message). Always heartbeats `last_activity_at`.
+
+**`App\Support\AppSettings`** is the single accessor for every setting (typed getters,
+safe defaults, no stale cache — admin edits take effect on the next request).
+**`App\Services\SessionTracker`** owns the `user_sessions` table: start/touch/end of a
+session, stale-slot cleanup, and the real active-user count used by the capacity limit.
+
 ---
 
 ## 3. Module map (route → controller → views)
@@ -75,6 +98,10 @@ tests (all completed → COMPLETED; any in progress → IN_PROGRESS; etc.).
 | Audit | `/audit-logs` | `AuditLogController` | `audit/index` |
 | Attachments | `/work-orders/{id}/attachments`, `/attachments/{id}/*` | `AttachmentController` | (forms inside work-order / my-work views) |
 | Comments | `/my-work/{id}/comments` | `WorkCommentController` | AJAX in `public/js/app.js` |
+| Registration | `/register` (guest) | `Auth\RegisterController` | `auth/register` |
+| Settings centre | `/settings*`, `/settings-active-users` | `SettingsController` | `settings/{index,active-users}` |
+| User approval | `/users/{id}/approve\|reject` | `UserController` | buttons in `users/index` |
+| Licence expiry screen | any route when expired | `EnforceLicense` middleware | `errors/license-expired` |
 
 Shared UI: `resources/views/layouts/app.blade.php` (sidebar, topbar, notification bell),
 partials `flash`, `empty`, `status-badge`, `priority-badge`.
@@ -128,6 +155,26 @@ Edit `WorkStatus::TRANSITIONS`. Add a `my-work` action mapping in
 `MyWorkController::action()` if analysts need to trigger it. Tests are your safety net —
 re-run the lifecycle sequence (README §Workflow).
 
+### …change a session/registration/limit/licence policy
+
+All values live in the `settings` table; change them at **`/settings`** — never in code.
+Validation keeps them consistent (e.g. the default duration must be one of the allowed
+options and ≤ the maximum; expiry ≥ activation). If a new policy key is ever needed:
+add an idempotent row in migration `2026_10_04_000003`, an accessor in `AppSettings`,
+and a form field in `resources/views/settings/index.blade.php`.
+
+### …renew / extend the application licence (company process)
+
+1. Sign in as an administrator (`system.settings`) — works even when the licence is
+   expired; the expiry gate never blocks this role.
+2. Open `/settings/license` → *Extend / Renew Validity*: choose **+days** or a
+   **new expiry date**, enter a mandatory reason, submit.
+3. The licence becomes active again immediately; `license_histories` records previous
+   and new expiry, actor and reason; the audit trail records the event; the warning
+   marker resets so future thresholds fire again.
+
+Suspend/reactivate lives on the same page (also history + audit logged).
+
 ### …add an e-mail / external notification
 
 `NotificationService::toRoles()` / `send()` currently create DB rows (in-app bell).
@@ -145,7 +192,12 @@ already configured (`QUEUE_CONNECTION=database`) if you want it async.
 | QC masters | `products`, `materials`, `sample_types`, `work_categories`, `priorities`, `instrument_types`, `instruments`, `test_types`, `test_methods`, `test_parameters`, `specifications`, `locations`, `settings`, `statuses` |
 | Work | `work_orders`, `work_order_tests`, `work_allocations`, `allocation_histories` |
 | Results & review | `test_results`, `test_result_parameters`, `review_histories`, `work_comments`, `work_attachments` |
-| System | `notifications`, `audit_logs`, `settings`, `migrations`, `sessions`, `cache` |
+| System | `notifications`, `audit_logs`, `settings`, `license_histories`, `user_sessions`, `migrations`, `sessions`, `cache` |
+
+The upgrade reuses the existing key/value **`settings`** table (groups: `general`,
+`registration`, `session`, `usage`, `license`), the existing **`user_sessions`** table
+(login time, last activity, logout reason + new `timeout_minutes`), and the existing
+`users.status`/audit/notification systems — no parallel structures were introduced.
 
 Migrations are timestamped `2026_01_01_0000xx_*` (11 files) and **match an existing
 schema exactly** — do not regenerate them blindly; edit in place if the schema must change,
@@ -171,6 +223,17 @@ curl -s -b jar.txt -c jar.txt -X POST http://127.0.0.1:8000/login \
      -d "_token=$TOKEN" -d "username=admin" -d "password=password"
 ```
 
+**Enterprise-control suite (47 tests, all green):** `tests/Feature/`
+`RegistrationTest` (enable/disable, pending approval, duplicates, password rules,
+role/status tampering, unauthorized approve → 403), `SessionPolicyTest` (choice
+stored, fallback above max, inactivity expiry + message, activity refresh, runtime
+max clamp, logout, remember-me), `ConcurrentUsersTest` (blocked at capacity with the
+exact message, slot release, same-user re-login, stale cleanup, unlimited, session-
+based counting), `ProjectLimitTest` (blocked at capacity, slot frees on completion,
+unlimited, existing orders untouched), `LicenseTest` (active/grace/expired/suspended,
+all three behaviours, privileged access, extension by days/date + history, invalid
+shortening, authorization, server-clock enforcement).
+
 Verified end-to-end (see PROGRESS.md): auth for all roles, master CRUD, work-order
 create + validation, allocation + candidates JSON, full status lifecycle, result entry,
 approve/rework/reject, attachments upload/download/delete, CSV export, notifications,
@@ -183,9 +246,9 @@ audit rows, and 403/redirect authorization checks.
 
 ## 7. Known limitations
 
-- **PHPUnit domain tests**: the baseline suite is green, but there are no feature tests
-  yet for the status engine, allocation ranking, or permission middleware —
-  highest-value next step.
+- **PHPUnit domain tests**: the enterprise-control suite (registration, session,
+  limits, licence — 47 tests) is green; QC-workflow features (allocation ranking,
+  review transitions) are still verified over HTTP rather than in PHPUnit.
 - **E-mail notifications**: in-app only; no mail transport wired.
 - **`roles` CRUD**: roles/permissions are seeded; there is no UI to edit them
   (`roles.manage` permission exists for a future screen).
@@ -211,15 +274,24 @@ audit rows, and 403/redirect authorization checks.
 
 ```
 app/Support/WorkStatus.php          status machine — edit transitions here
+app/Support/AppSettings.php         ALL enterprise settings accessors (typed, safe defaults)
 app/Services/StatusService.php      transition + roll-up enforcement
+app/Services/SessionTracker.php     user_sessions tracking, active-user count, slot cleanup
 app/Services/AllocationService.php  candidate scoring (skill match + workload)
-app/Http/Controllers/…              16 controllers, all thin
-bootstrap/app.php                    middleware aliases: permission, active; auth redirects
+app/Http/Controllers/…              17 controllers, all thin
+app/Http/Middleware/EnforceLicense.php    server-side licence gate + expiry screen
+app/Http/Middleware/CheckInactivity.php   server-side inactivity timeout
+bootstrap/app.php                    middleware aliases + web-group pipeline order
 app/Providers/AppServiceProvider.php @permission / @role Blade directives
+database/migrations/2026_10_04_*     additive upgrade migrations (3)
 database/seeders/                   demo data (roles, users, masters, work orders)
-resources/views/layouts/app.blade.php  app shell (sidebar, topbar, bell)
+resources/views/settings/           settings centre (tabs: users/session/usage/license)
+resources/views/auth/register.blade.php  self-registration form
+resources/views/errors/license-expired.blade.php  professional 503 screen
+resources/views/layouts/app.blade.php  app shell (sidebar, topbar, licence banner)
 public/css/app.css                  design system (CSS variables, cards, badges)
 public/js/app.js                    toasts, confirm dialogs, AJAX comments, sidebar
-routes/web.php                      57 routes, permission middleware
+tests/Feature/*Test.php             47 enterprise-control tests (php artisan test)
+routes/web.php                      67 routes, permission middleware
 storage/logs/laravel.log            first place to look when a page 500s
 ```
